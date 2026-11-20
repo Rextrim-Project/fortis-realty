@@ -519,7 +519,7 @@ function brandProjects() {
   const sub = h1 && $$('p', h1.closest('section') || document).find(p => /Thoughtfully|Koleksi hunian|A selection of homes/.test(p.textContent));
   set(sub, tr('Koleksi hunian, ruko, apartemen, dan lahan pilihan dari Fortis Realty, dengan legalitas jelas, proses transparan, dan pendampingan agen profesional.'));
   // the template only has 6 cards: clone the last card wrapper until there is one per listing
-  const L = state.hot ? P.filter(p => deal(p).active) : P;   // /project?hotDeal=true -> promo units only
+  const L = P.filter(p => matchQDL(p) && (!state.hot || deal(p).active));   // /project?hotDeal=true -> promo units only
   let projGrid = null;
   const firstCard = $('a[href*="project/"], a[data-fr-go]');
   if (firstCard) {
@@ -556,8 +556,8 @@ function brandProjects() {
   });
   if (projGrid) {
     let bar = $('#fr-pfilter');
-    if (!bar) { bar = document.createElement('div'); bar.id = 'fr-pfilter'; bar.className = 'fr-pfilter'; bar.innerHTML = `<button class="fr-chip fr-chip-hot" data-fh type="button" aria-pressed="${state.hot}">Hot Deals</button><span class="fr-count"></span>`; projGrid.parentElement.insertBefore(bar, projGrid); }
-    const note = !state.hot ? '' : L.length ? `${L.length} unit ditemukan` : 'Belum ada unit Hot Deal saat ini.';
+    if (!bar) { bar = document.createElement('div'); bar.id = 'fr-pfilter'; bar.className = 'fr-pfilter'; bar.innerHTML = `<input class="fr-input fr-q" id="fr-q" type="search" placeholder="Cari nama perumahan…" aria-label="Nama perumahan"><select class="fr-select" id="fr-dev" aria-label="Developer"><option value="all">Semua Developer</option>${uniq(P.map(devOf)).map(l => `<option>${esc(l)}</option>`).join('')}</select><select class="fr-select" id="fr-loc" aria-label="Lokasi"><option value="all">Semua Lokasi</option>${uniq(P.map(p => p.loc)).map(l => `<option>${esc(l)}</option>`).join('')}</select><button class="fr-chip fr-chip-hot" data-fh type="button" aria-pressed="${state.hot}">Hot Deals</button><span class="fr-count"></span>`; projGrid.parentElement.insertBefore(bar, projGrid); }
+    const note = !L.length ? (state.hot && !state.q && state.dev === 'all' && state.loc === 'all' ? 'Belum ada unit Hot Deal saat ini.' : 'Tidak ada unit yang cocok dengan filter.') : (state.hot || state.q || state.dev !== 'all' || state.loc !== 'all') ? `${L.length} unit ditemukan` : '';
     set($('.fr-count', bar), LANG === 'en' ? trAny(note) : note);
   }
   decorateProjectImages();
@@ -571,7 +571,12 @@ function brandProjects() {
 }
 
 /* ================= sections ================= */
-const state = { type: 'all', status: 'all', loc: 'all', unit: '', hot: /[?&]hotDeal=(true|1)(&|$)/.test(location.search) };
+const devOf = p => p.developer || ((p.fac || []).map(f => /^Developer:\s*(.+)$/i.exec(f)).find(Boolean) || [])[1] || '';
+const norm = x => String(x || '').toLowerCase();
+const matchQDL = p => (!state.q || norm(p.name).includes(norm(state.q.trim()))) && (state.dev === 'all' || devOf(p) === state.dev) && (state.loc === 'all' || p.loc === state.loc);
+const uniq = a => [...new Set(a.filter(Boolean))].sort((x, y) => x.localeCompare(y));
+const refreshList = () => { if ($('#fr-grid')) renderGrid(); else brandProjects(); };
+const state = { q: '', dev: 'all', type: 'all', status: 'all', loc: 'all', unit: '', hot: /[?&]hotDeal=(true|1)(&|$)/.test(location.search) };
 
 function aboutSec() {
   const pill = [['01', 'Listing Primer Resmi', 'Unit baru langsung dari developer mitra, dengan informasi harga dan legalitas yang jelas.'],
@@ -610,6 +615,8 @@ function sections() {
     <div class="fr-frow"><b>Status</b>${[['all', 'Semua'], ['dijual', 'Dijual'], ['disewa', 'Disewa']].map(([k, v]) => `<button class="fr-chip" data-fs="${k}" aria-pressed="${k === 'all'}">${v}</button>`).join('')}
       <select class="fr-select" id="fr-loc" aria-label="Lokasi"><option value="all">Semua Lokasi</option>${locs.map(l => `<option>${esc(l)}</option>`).join('')}</select>
     </div>
+    <div class="fr-frow"><b>Cari</b><input class="fr-input fr-q" id="fr-q" type="search" placeholder="Nama perumahan…" aria-label="Nama perumahan" value="${esc(state.q)}">
+      <select class="fr-select" id="fr-dev" aria-label="Developer"><option value="all">Semua Developer</option>${uniq(P.map(devOf)).map(l => `<option>${esc(l)}</option>`).join('')}</select></div>
     <div class="fr-frow"><b>Promo</b><button class="fr-chip fr-chip-hot" data-fh type="button" aria-pressed="${state.hot}">Hot Deals</button></div>
     <div class="fr-frow fr-countrow"><span class="fr-count" id="fr-count"></span></div>
   </div>
@@ -657,7 +664,7 @@ function sections() {
 
 /* ---- catalog ---- */
 function renderGrid() {
-  const list = P.filter(p => (state.type === 'all' || p.type === state.type) && (state.status === 'all' || p.status === state.status) && (state.loc === 'all' || p.loc === state.loc) && (!state.hot || deal(p).active));
+  const list = P.filter(p => (state.type === 'all' || p.type === state.type) && (state.status === 'all' || p.status === state.status) && matchQDL(p) && (!state.hot || deal(p).active));
   const HOME_MAX = 6, shown = list.slice(0, HOME_MAX);
   $('#fr-count').textContent = list.length > HOME_MAX ? `Menampilkan ${shown.length} dari ${list.length} unit` : `${list.length} unit ditemukan`;
   const lm = $('#fr-loadmore'); if (lm) { lm.parentElement.hidden = list.length <= HOME_MAX; lm.setAttribute('href', U('/project' + (state.hot ? '?hotDeal=true' : ''))); const nn = $('.fr-more-n', lm), v = '+' + (list.length - HOME_MAX); if (nn && nn.textContent !== v) nn.textContent = v; }
@@ -1114,7 +1121,8 @@ window.addEventListener('click', e => {
     if (m) { if (document.getElementById(m[1])) goTo(m[1]); else location.href = U(h); } else location.href = U(h);
   }
 }, true);
-document.addEventListener('change', e => { if (e.target.id === 'fr-loc') { state.loc = e.target.value; renderGrid(); } });
+document.addEventListener('change', e => { const id = e.target.id; if (id === 'fr-loc') { state.loc = e.target.value; refreshList(); } else if (id === 'fr-dev') { state.dev = e.target.value; refreshList(); } });
+document.addEventListener('input', e => { if (e.target.id === 'fr-q') { state.q = e.target.value; refreshList(); } });
 // the first nav item was a dropdown ("Pages") in the template; it is now a plain link, so swallow its hover/focus events
 ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointermove', 'mousemove', 'focusin', 'touchstart'].forEach(t =>
   window.addEventListener(t, e => { if (e.target.closest && e.target.closest('nav [class*="gf9md2"]')) e.stopImmediatePropagation(); }, true));

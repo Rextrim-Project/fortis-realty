@@ -678,3 +678,9 @@ footer a:hover,footer a:hover p,footer a:hover .framer-text{color:var(--text-pri
 .fr-floatout b{font:600 26px/1.1 var(--fr-head)}
 .fr-disc{font-size:12px;line-height:1.5;opacity:.6;margin:14px 0 0}
 [hidden]{display:none!important}
+
+/* name search + developer/location filters */
+.fr-filters .fr-q,.fr-pfilter .fr-q{width:auto;min-width:250px;border:1px solid color-mix(in srgb,var(--bg-primary) 20%,transparent);padding:13px 22px;font:500 16px/16px var(--fr-head);text-transform:none;background:transparent}
+.fr-filters .fr-q:focus,.fr-pfilter .fr-q:focus{border-color:var(--bg-primary)}
+.fr-pfilter .fr-select{width:auto;min-width:220px;border:1px solid color-mix(in srgb,var(--bg-primary) 20%,transparent);padding:13px 40px 13px 18px;font:500 15px/16px var(--fr-head);text-transform:uppercase;background-position:right 16px center}
+@media(max-width:700px){.fr-filters .fr-q,.fr-pfilter .fr-q,.fr-pfilter .fr-select{width:100%;min-width:0}}
