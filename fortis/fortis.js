@@ -956,13 +956,16 @@ function applyCms() {
   const host = $('#fr-root'); if (!host) return;
   const map = { services: '#tentang', lookbook: '#katalog', instagram: '#instagram' };
   const list = CMS.sections.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  const off = id => { const x = list.find(y => y.id === id); return !!x && x.visible === false; };
   list.forEach(x => {
-    if (x.id === 'hotDeals') { $$('#fr-root [data-fh]').forEach(el => { el.hidden = x.visible === false; }); return; }
-    if (x.id === 'hero' && hero) { hero.style.display = x.visible === false ? 'none' : ''; return; }
     const el = map[x.id] && $(map[x.id]); if (!el) return;
-    el.hidden = x.visible === false;
-    if (x.visible !== false) host.appendChild(el);   // re-append in orderIndex order (nodes move, not copy)
+    el.hidden = off(x.id);
+    host.appendChild(el);   // re-append in order (nodes move, not copy)
   });
+  $$('#fr-root [data-fh]').forEach(el => { el.hidden = off('hotDeals'); });
+  if (hero) hero.style.display = off('hero') ? 'none' : '';
+  const hs = hero && $('[data-framer-name="Stats"]', hero); if (hs) hs.style.display = off('stats') ? 'none' : '';
+  $$('#tentang .fr-astats').forEach(el => { el.hidden = off('stats'); });
   const kpr = $('#kpr'); if (kpr) host.appendChild(kpr);   // KPR is not CMS-managed: keep after the catalogue
 }
 
