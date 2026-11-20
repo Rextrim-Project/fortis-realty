@@ -779,7 +779,7 @@ function openModal(id) {
    <div class="fr-dtop">
     <div class="fr-dposter"><img src="${IMG(p.img)}" alt="${esc(p.name)}"></div>
     <div class="fr-dinfo">
-      <div class="fr-badges" style="position:static"><span class="fr-badge ${p.status === 'disewa' ? 'rent' : ''}" style="border:1px solid #27141833">${st}</span></div>
+      <div class="fr-badges" style="position:static"><span class="fr-badge ${p.status === 'disewa' ? 'rent' : ''}" style="border:1px solid color-mix(in srgb,var(--bg-primary) 20%,transparent)">${st}</span></div>
       <h1 class="fr-dh">${esc(p.name)}</h1><div class="fr-loc" style="margin:0">${ICO.pin}${esc(p.loc)}, ${esc(p.city)}</div>
       ${promoHTML(p)}
       <div class="fr-dprice"><div class="fr-price">${priceHTML(p)}</div></div>
@@ -991,7 +991,7 @@ function frPopup(ok, title, text, waUrl) {
   const d = document.createElement('div'); d.id = 'fr-pop'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
   d.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);padding:20px';
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  d.innerHTML = `<div style="background:#381F23;color:#E8D5B5;border:1px solid #BA976D;border-radius:16px;max-width:420px;width:100%;padding:32px 28px;text-align:center;font-family:inherit"><div style="width:56px;height:56px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:28px;background:${ok ? '#BA976D' : '#5A2A31'};color:#271418">${ok ? '✓' : '!'}</div><h3 style="margin:0 0 10px;font-size:22px">${esc(title)}</h3><p style="margin:0 0 22px;line-height:1.5;opacity:.9">${esc(text)}</p>${waUrl ? `<a href="${esc(waUrl)}" target="_blank" rel="noopener" style="display:block;margin-bottom:10px;color:#BA976D">Hubungi via WhatsApp</a>` : ''}<button type="button" data-pop-x style="background:#BA976D;color:#271418;border:0;border-radius:999px;padding:12px 32px;font-weight:600;cursor:pointer">Tutup</button></div>`;
+  d.innerHTML = `<div style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--gold-solid);border-radius:16px;max-width:420px;width:100%;padding:32px 28px;text-align:center;font-family:inherit"><div style="width:56px;height:56px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:28px;background:${ok ? '#BA976D' : '#5A2A31'};color:#271418">${ok ? '✓' : '!'}</div><h3 style="margin:0 0 10px;font-size:22px">${esc(title)}</h3><p style="margin:0 0 22px;line-height:1.5;opacity:.9">${esc(text)}</p>${waUrl ? `<a href="${esc(waUrl)}" target="_blank" rel="noopener" style="display:block;margin-bottom:10px;color:#BA976D">Hubungi via WhatsApp</a>` : ''}<button type="button" data-pop-x style="background:#BA976D;color:#271418;border:0;border-radius:999px;padding:12px 32px;font-weight:600;cursor:pointer">Tutup</button></div>`;
   d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-pop-x]')) d.remove(); });
   document.body.appendChild(d); const b = $('[data-pop-x]', d); if (b) b.focus();
 }
