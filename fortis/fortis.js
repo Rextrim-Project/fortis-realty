@@ -982,6 +982,17 @@ function mount() {
 
 /* ---- contact section (template's "Let's bring your ideas to life" card) -> form that sends to WhatsApp ---- */
 const SERVICES = ['Booking survey unit', 'Beli properti', 'Sewa properti', 'Jual / titip jual properti', 'Konsultasi KPR', 'Lainnya'];
+/* success / error popup for the contact form */
+function frPopup(ok, title, text, waUrl) {
+  const old = $('#fr-pop'); if (old) old.remove();
+  const d = document.createElement('div'); d.id = 'fr-pop'; d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true');
+  d.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);padding:20px';
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  d.innerHTML = `<div style="background:#381F23;color:#E8D5B5;border:1px solid #BA976D;border-radius:16px;max-width:420px;width:100%;padding:32px 28px;text-align:center;font-family:inherit"><div style="width:56px;height:56px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:28px;background:${ok ? '#BA976D' : '#5A2A31'};color:#271418">${ok ? '✓' : '!'}</div><h3 style="margin:0 0 10px;font-size:22px">${esc(title)}</h3><p style="margin:0 0 22px;line-height:1.5;opacity:.9">${esc(text)}</p>${waUrl ? `<a href="${esc(waUrl)}" target="_blank" rel="noopener" style="display:block;margin-bottom:10px;color:#BA976D">Hubungi via WhatsApp</a>` : ''}<button type="button" data-pop-x style="background:#BA976D;color:#271418;border:0;border-radius:999px;padding:12px 32px;font-weight:600;cursor:pointer">Tutup</button></div>`;
+  d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-pop-x]')) d.remove(); });
+  document.body.appendChild(d); const b = $('[data-pop-x]', d); if (b) b.focus();
+}
+
 function setupContact(sec) {
   sec.id = 'kontak'; sec.style.scrollMarginTop = '0';
   const old = $('form', sec); if (!old || $('#fr-contact', sec)) return;
@@ -1030,11 +1041,15 @@ function setupContact(sec) {
       msg = `Halo Fortis Realty, saya ingin booking jadwal survey lokasi untuk unit ${pr.name} pada tanggal ${d}-${m}-${y} pukul ${v.jam}. Nama: ${v.nama.trim()}.`;
     } else msg = `Halo Fortis Realty, saya ${v.nama.trim()} ingin ${v.layanan.toLowerCase()}.`;
     msg += ` No. HP: ${v.hp.trim()}.`; if (v.email) msg += ` Email: ${v.email.trim()}.`; if ((v.pesan || '').trim()) msg += ` Catatan: ${v.pesan.trim()}`;
-    $('#fr-cstatus').textContent = 'Membuka WhatsApp Concierge…'; window.open(wa(msg), '_blank', 'noopener');
+    const st = $('#fr-cstatus'); st.textContent = 'Mengirim…';
     const lead = { name: v.nama.trim(), phone: ph, service: v.layanan };
     if (v.email) lead.email = v.email.trim(); if ((v.pesan || '').trim()) lead.message = v.pesan.trim();
     if (isSurvey) { lead.propertyNo = +v.unit; lead.viewingAt = new Date(`${v.tgl}T${v.jam}:00+07:00`).toISOString(); }
-    sendInquiry(lead).then(r => { const st = $('#fr-cstatus'); if (r && st) st.textContent = isSurvey ? `Booking survei Anda sudah terdaftar (${r.dealCode}).${r.whatsappSent ? ' Konfirmasi otomatis telah dikirim ke WhatsApp Anda.' : ''} Membuka WhatsApp Concierge…` : `Permintaan Anda tercatat (${r.dealCode}). Membuka WhatsApp Concierge…`; });
+    sendInquiry(lead).then(r => {
+      st.textContent = '';
+      if (r) { f.reset(); frPopup(true, isSurvey ? 'Booking Survei Berhasil' : 'Pesan Terkirim', (isSurvey ? 'Booking survei Anda sudah terdaftar' : 'Permintaan Anda tercatat') + (r.dealCode ? ` (${r.dealCode})` : '') + '. Tim kami akan segera menghubungi Anda.'); }
+      else frPopup(false, 'Gagal Mengirim', 'Terjadi kendala saat mengirim. Silakan coba lagi atau hubungi kami lewat WhatsApp.', wa(msg));
+    });
   });
 }
 
