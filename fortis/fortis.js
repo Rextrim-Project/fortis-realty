@@ -87,9 +87,12 @@ const KPR_READY = API ? apiGet('/api/public/settings').then(j => { if (typeof j.
 /** sends a lead to the dashboard (best effort: WhatsApp stays the primary channel). A past survey time is retried as a note. */
 async function sendInquiry(p) {
   if (!API) return null;
-  const post = async body => { try { const r = await fetch(API + '/api/public/inquiries', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), keepalive: true, signal: AbortSignal.timeout(6000) }); return r.ok ? await r.json() : (r.status === 400 ? 400 : null); } catch (e) { return null; } };
-  let r = await post(p);
-  if (r === 400 && p.viewingAt) { const { viewingAt, ...rest } = p; r = await post({ ...rest, message: `${rest.message ? rest.message + ' ' : ''}(Jadwal survey diminta: ${viewingAt})` }); }
+  const post = async (path, body) => { try { const r = await fetch(API + path, { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(body), keepalive: true, signal: AbortSignal.timeout(8000) }); return r.ok ? await r.json() : r.status; } catch (e) { return null; } };
+  let r = p.viewingAt ? await post('/api/public/bookings', p) : null;      // survey booking: registers it + sends the WhatsApp confirmation
+  if (typeof r !== 'object' || r === null) {                                // plain inquiry, or an older dashboard without /bookings
+    r = await post('/api/public/inquiries', p);
+    if (r === 400 && p.viewingAt) { const { viewingAt, ...rest } = p; r = await post('/api/public/inquiries', { ...rest, message: `${rest.message ? rest.message + ' ' : ''}(Jadwal survey diminta: ${viewingAt})` }); }
+  }
   return r && r.dealCode ? r : null;
 }
 let lastSync = Date.now();
@@ -255,6 +258,10 @@ const EN = {
   'Perkiraan angsuran bulanan dengan metode anuitas. Hasil bersifat estimasi dan dapat berbeda dengan ketentuan bank.': "Estimated monthly installments using the annuity method. Results are estimates and may differ from the bank's terms.",
   'Harga Properti (Rp)': 'Property Price (Rp)', 'Uang Muka / DP (%)': 'Down Payment (%)', 'Jangka Waktu / Tenor': 'Loan Term', 'Suku Bunga Tahunan (%) — fixed': 'Annual Interest Rate (%) — fixed',
   'Estimasi Angsuran / Bulan': 'Estimated Monthly Installment', 'Total Uang Muka (DP)': 'Total Down Payment', 'Pokok Pinjaman': 'Loan Principal', 'Total Pembayaran Pinjaman': 'Total Loan Repayment',
+  'Skema Bunga': 'Interest Scheme', 'Fixed + Floating (Berjenjang)': 'Fixed + Floating (Stepped)', 'Fixed Rate (Bunga Tetap)': 'Fixed Rate',
+  'Suku Bunga Fixed (%)': 'Fixed Interest Rate (%)', 'Masa Fixed (Tahun)': 'Fixed Period (Years)', 'Estimasi Suku Bunga Floating (%)': 'Estimated Floating Rate (%)',
+  'Suku bunga maksimal 100%': 'Maximum interest rate is 100%', 'Estimasi Cicilan Masa Floating (Tahun berikutnya)': 'Estimated Floating Installment (following years)',
+  'Suku bunga floating mengikuti penyesuaian suku bunga BI/bank dan dapat berubah sewaktu-waktu. Angka di atas hanya estimasi.': 'Floating rates follow BI/bank rate adjustments and may change at any time. Figures above are estimates only.',
   'Konsultasi KPR via WhatsApp': 'Mortgage Consultation via WhatsApp', 'Slider harga': 'Price slider', 'Slider DP': 'Down payment slider',
   // instagram
   'Ikuti update & listing terbaru di Instagram': 'Follow the latest updates & listings on Instagram',
@@ -616,14 +623,24 @@ function sections() {
     <div class="fr-kin">
       <div class="fr-field"><label for="k-harga">Harga Properti (Rp)</label><input class="fr-input" id="k-harga" inputmode="numeric" value="1.000.000.000"><input type="range" id="k-harga-r" min="100000000" max="10000000000" step="50000000" value="1000000000" aria-label="Slider harga"></div>
       <div class="fr-field"><label for="k-dp">Uang Muka / DP (%)</label><input class="fr-input" id="k-dp" type="number" min="0" max="90" step="1" value="20"><input type="range" id="k-dp-r" min="0" max="90" step="1" value="20" aria-label="Slider DP"><div class="fr-hint" id="k-dp-n"></div></div>
-      <div class="fr-krow">
-        <div class="fr-field"><label for="k-tenor">Jangka Waktu / Tenor</label><select class="fr-select" id="k-tenor">${[5, 10, 15, 20, 25].map(t => `<option value="${t}"${t === 15 ? ' selected' : ''}>${t} tahun</option>`).join('')}</select></div>
-        <div class="fr-field"><label for="k-bunga">Suku Bunga Tahunan (%) — fixed</label><input class="fr-input" id="k-bunga" type="number" min="0" max="30" step="0.1" value="5.5"></div>
+      <div class="fr-field"><label id="k-skema-l">Skema Bunga</label><div class="fr-seg" role="radiogroup" aria-labelledby="k-skema-l"><button type="button" class="on" role="radio" aria-checked="true" data-skema="float">Fixed + Floating (Berjenjang)</button><button type="button" role="radio" aria-checked="false" data-skema="fixed">Fixed Rate (Bunga Tetap)</button></div></div>
+      <div class="fr-field"><label for="k-tenor">Jangka Waktu / Tenor</label><select class="fr-select" id="k-tenor">${[5, 10, 15, 20, 25].map(t => `<option value="${t}"${t === 15 ? ' selected' : ''}>${t} tahun</option>`).join('')}</select></div>
+      <div id="k-fixed-box" hidden>
+        <div class="fr-field"><label for="k-bunga">Suku Bunga Tahunan (%) — fixed</label><input class="fr-input" id="k-bunga" type="number" min="0" max="100" step="0.1" value="5.5"><div class="fr-err" data-err="k-bunga" role="alert" hidden>Suku bunga maksimal 100%</div></div>
+      </div>
+      <div id="k-float-box">
+        <div class="fr-krow">
+          <div class="fr-field"><label for="k-bfix">Suku Bunga Fixed (%)</label><input class="fr-input" id="k-bfix" type="number" min="0" max="100" step="0.1" value="6.5"><div class="fr-err" data-err="k-bfix" role="alert" hidden>Suku bunga maksimal 100%</div></div>
+          <div class="fr-field"><label for="k-fyr">Masa Fixed (Tahun)</label><input class="fr-input" id="k-fyr" type="number" min="1" step="1" value="3"><div class="fr-hint" id="k-fyr-n"></div></div>
+        </div>
+        <div class="fr-field"><label for="k-bfl">Estimasi Suku Bunga Floating (%)</label><input class="fr-input" id="k-bfl" type="number" min="0" max="100" step="0.1" value="11.5"><div class="fr-err" data-err="k-bfl" role="alert" hidden>Suku bunga maksimal 100%</div></div>
       </div>
     </div>
     <div class="fr-kout" aria-live="polite">
-      <div><div class="fr-big-l">Estimasi Angsuran / Bulan</div><div class="fr-big" id="k-cicil"></div></div>
+      <div><div class="fr-big-l" id="k-cicil-l">Estimasi Angsuran / Bulan</div><div class="fr-big" id="k-cicil"></div></div>
+      <div class="fr-floatout" id="k-fl-out" hidden><span>Estimasi Cicilan Masa Floating (Tahun berikutnya)</span><b id="k-cicil2"></b></div>
       <div class="fr-brk"><div><span>Total Uang Muka (DP)</span><b id="k-dpv"></b></div><div><span>Pokok Pinjaman</span><b id="k-pokok"></b></div><div><span>Total Pembayaran Pinjaman</span><b id="k-total"></b></div></div>
+      <p class="fr-disc" id="k-disc">Suku bunga floating mengikuti penyesuaian suku bunga BI/bank dan dapat berubah sewaktu-waktu. Angka di atas hanya estimasi.</p>
       <a class="fr-btn wa" id="k-wa" href="#" target="_blank" rel="noopener">${ICO.wa}Konsultasi KPR via WhatsApp</a>
     </div>
   </div>
@@ -793,25 +810,57 @@ function goTo(id) { const el = document.getElementById(id); if (el) { closeModal
 function initKPR() {
   const g = id => $('#' + id);
   const num = s => +String(s).replace(/[^\d]/g, '') || 0;
+  const annuity = (P, r, n) => { if (P <= 0 || n <= 0) return 0; const i = r / 100 / 12; return i === 0 ? P / n : P * i * Math.pow(1 + i, n) / (Math.pow(1 + i, n) - 1); };
+  const balance = (P, r, n, k) => { const i = r / 100 / 12, A = annuity(P, r, n); return i === 0 ? P - A * k : P * Math.pow(1 + i, k) - A * (Math.pow(1 + i, k) - 1) / i; };
+  let skema = 'float';
+  /** reads a rate field, hard-capped at 100%: shows the inline message and clamps */
+  const rate = id => {
+    const el = g(id), err = $(`[data-err="${id}"]`), v = parseFloat(el.value), over = v > 100;
+    if (err) err.hidden = !over;
+    return over ? 100 : Math.max(0, v || 0);
+  };
   function calc() {
     const harga = num(g('k-harga').value);
     const dp = Math.min(90, Math.max(0, parseFloat(g('k-dp').value) || 0));
-    const tenor = +g('k-tenor').value, bunga = Math.max(0, parseFloat(g('k-bunga').value) || 0);
-    const dpv = harga * dp / 100, pokok = harga - dpv, i = bunga / 100 / 12, n = tenor * 12;
-    const cicil = pokok <= 0 ? 0 : i === 0 ? pokok / n : pokok * (i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
-    const total = cicil * n;
+    const tenor = +g('k-tenor').value, n = tenor * 12;
+    const dpv = harga * dp / 100, pokok = harga - dpv;
     g('k-dp-n').textContent = `Nominal DP: ${rp(dpv)}`;
-    g('k-cicil').textContent = rp(cicil); g('k-dpv').textContent = rp(dpv); g('k-pokok').textContent = rp(pokok); g('k-total').textContent = rp(total);
-    const msg = `Halo Fortis Realty, saya ingin konsultasi KPR. Simulasi saya: Harga properti ${rp(harga)}, DP ${dp}% (${rp(dpv)}), pokok pinjaman ${rp(pokok)}, tenor ${tenor} tahun, bunga ${bunga}% fixed. Estimasi cicilan ${rp(cicil)}/bulan, total pembayaran pinjaman ${rp(total)}.`;
+    g('k-dpv').textContent = rp(dpv); g('k-pokok').textContent = rp(pokok);
+    let msg, total;
+    if (skema === 'fixed') {
+      const bunga = rate('k-bunga'), cicil = annuity(pokok, bunga, n); total = cicil * n;
+      g('k-cicil-l').textContent = 'Estimasi Angsuran / Bulan'; g('k-cicil').textContent = rp(cicil);
+      msg = `Halo Fortis Realty, saya ingin konsultasi KPR. Simulasi saya: Harga properti ${rp(harga)}, DP ${dp}% (${rp(dpv)}), pokok pinjaman ${rp(pokok)}, tenor ${tenor} tahun, bunga ${bunga}% fixed. Estimasi cicilan ${rp(cicil)}/bulan, total pembayaran pinjaman ${rp(total)}.`;
+    } else {
+      const bf = rate('k-bfix'), bl = rate('k-bfl');
+      const fy = Math.min(Math.max(1, Math.floor(parseFloat(g('k-fyr').value) || 1)), tenor);
+      g('k-fyr-n').textContent = fy >= tenor ? `Masa fixed mencakup seluruh tenor (${tenor} tahun).` : `Masa floating: tahun ${fy + 1}–${tenor}.`;
+      const k = fy * 12, c1 = annuity(pokok, bf, n), sisa = Math.max(0, balance(pokok, bf, n, k)), c2 = fy >= tenor ? 0 : annuity(sisa, bl, n - k);
+      total = c1 * k + c2 * (n - k);
+      g('k-cicil-l').textContent = `Cicilan Masa Fixed (Tahun 1–${fy})`;
+      g('k-cicil').textContent = rp(c1) + ' / bulan';
+      g('k-fl-out').hidden = fy >= tenor; g('k-cicil2').textContent = rp(c2) + ' / bulan';
+      msg = `Halo Fortis Realty, saya ingin konsultasi KPR. Simulasi saya: Harga properti ${rp(harga)}, DP ${dp}% (${rp(dpv)}), pokok pinjaman ${rp(pokok)}, tenor ${tenor} tahun. Bunga fixed ${bf}% selama ${fy} tahun: cicilan ${rp(c1)}/bulan.` + (fy < tenor ? ` Estimasi floating ${bl}% tahun ${fy + 1}–${tenor}: cicilan ${rp(c2)}/bulan.` : '') + ` Total pembayaran pinjaman ${rp(total)}.`;
+    }
+    g('k-total').textContent = rp(total);
     g('k-wa').href = wa(msg);
   }
+  function setSkema(v) {
+    skema = v;
+    $$('[data-skema]').forEach(b => { const on = b.dataset.skema === v; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+    g('k-fixed-box').hidden = v !== 'fixed'; g('k-float-box').hidden = v !== 'float';
+    g('k-disc').hidden = v !== 'float'; if (v !== 'float') g('k-fl-out').hidden = true;
+    calc();
+  }
+  $$('[data-skema]').forEach(b => b.addEventListener('click', () => setSkema(b.dataset.skema)));
   g('k-harga').addEventListener('input', e => { const n = num(e.target.value); e.target.value = n ? rp(n).slice(3) : ''; g('k-harga-r').value = Math.min(Math.max(n, 1e8), 1e10); calc(); });
   g('k-harga-r').addEventListener('input', e => { g('k-harga').value = rp(+e.target.value).slice(3); calc(); });
   g('k-dp').addEventListener('input', e => { g('k-dp-r').value = e.target.value; calc(); });
   g('k-dp-r').addEventListener('input', e => { g('k-dp').value = e.target.value; calc(); });
-  g('k-tenor').addEventListener('change', calc); g('k-bunga').addEventListener('input', calc);
-  calc();
+  g('k-tenor').addEventListener('change', calc);
+  ['k-bunga', 'k-bfix', 'k-bfl', 'k-fyr'].forEach(id => g(id).addEventListener('input', calc));
   g('k-bunga').addEventListener('input', e => { e.target.dataset.touched = '1'; });
+  setSkema('float');
   KPR_READY.then(() => { const b = g('k-bunga'); if (KPR_RATE === null || !b || b.dataset.touched) return; b.value = KPR_RATE; calc(); });   // benchmark rate from the dashboard
   window.__frSetKpr = price => { g('k-harga').value = rp(price).slice(3); g('k-harga-r').value = Math.min(Math.max(price, 1e8), 1e10); calc(); };
 }
@@ -876,6 +925,47 @@ function enhanceSelect(sel) {
   sync(); DD_SYNC.push(sync);
 }
 
+/* ---- CMS sync: theme, hero media, about photos, section order/visibility (from /api/public/cms) ---- */
+const CMS_KEY = 'fr_cms_v1';
+const CMS_THEME_DEFAULT = { bgPrimary: '#271418', bgSecondary: '#381F23', accentMaroon: '#5A2A31', goldSolid: '#BA976D', textPrimary: '#E8D5B5' };
+let CMS = null;
+try { CMS = JSON.parse(localStorage.getItem(CMS_KEY) || 'null'); } catch (e) {}
+const CMS_READY = API ? apiGet('/api/public/cms').then(j => { if (j && Array.isArray(j.sections)) { CMS = j; try { localStorage.setItem(CMS_KEY, JSON.stringify(j)); } catch (e) {} } }).catch(() => {}) : Promise.resolve();
+const okColor = v => typeof v === 'string' && /^#[0-9a-f]{3,8}$|^rgba?\([\d\s.,%]+\)$/i.test(v.trim());
+function applyTheme() {
+  const t = Object.assign({}, CMS_THEME_DEFAULT, CMS && CMS.theme || {}), st = document.documentElement.style;
+  [['--bg-primary', 'bgPrimary'], ['--bg-secondary', 'bgSecondary'], ['--accent-maroon', 'accentMaroon'], ['--gold-solid', 'goldSolid'], ['--text-primary', 'textPrimary']]
+    .forEach(([v, k]) => st.setProperty(v, okColor(t[k]) ? t[k] : CMS_THEME_DEFAULT[k]));
+}
+function applyCms() {
+  applyTheme();
+  if (!CMS) return;
+  const safe = u => typeof u === 'string' && /^(https?:)?\/\/|^\//.test(u);
+  const hero = $('section[data-framer-name="Hero Section"]');
+  const h = CMS.hero || {};
+  if (hero && (safe(h.videoUrl) || safe(h.fallbackImage))) {
+    const v = $('video', hero);
+    if (v && safe(h.videoUrl)) {
+      if (v.getAttribute('src') !== h.videoUrl) { v.removeAttribute('src'); $$('source', v).forEach(x => x.remove()); v.src = h.videoUrl; v.muted = true; v.loop = true; v.playsInline = true; if (safe(h.fallbackImage)) v.poster = h.fallbackImage; const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); }
+    } else if (safe(h.fallbackImage)) {
+      const im = $('img', hero); if (im) { im.removeAttribute('srcset'); im.src = h.fallbackImage; }
+    }
+  }
+  const ph = (CMS.aboutPhotos || []).filter(safe);
+  $$('#tentang .fr-about-img img').forEach((im, i) => { if (ph[i] && im.getAttribute('src') !== ph[i]) im.src = ph[i]; });
+  const host = $('#fr-root'); if (!host) return;
+  const map = { services: '#tentang', lookbook: '#katalog', instagram: '#instagram' };
+  const list = CMS.sections.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  list.forEach(x => {
+    if (x.id === 'hotDeals') { $$('#fr-root [data-fh]').forEach(el => { el.hidden = x.visible === false; }); return; }
+    if (x.id === 'hero' && hero) { hero.style.display = x.visible === false ? 'none' : ''; return; }
+    const el = map[x.id] && $(map[x.id]); if (!el) return;
+    el.hidden = x.visible === false;
+    if (x.visible !== false) host.appendChild(el);   // re-append in orderIndex order (nodes move, not copy)
+  });
+  const kpr = $('#kpr'); if (kpr) host.appendChild(kpr);   // KPR is not CMS-managed: keep after the catalogue
+}
+
 function mount() {
   const hero = $('section[data-framer-name="Hero Section"]');
   if (!hero || $('#katalog')) return false;
@@ -887,7 +977,7 @@ function mount() {
   $$('section').forEach(s => { if (s !== hero && s !== cs && !s.dataset.fr) s.setAttribute('data-fr-hide', ''); });
   [...hero.parentElement.children].forEach(c => { if (c !== hero && c !== host && c !== keep) c.setAttribute('data-fr-hide', ''); });
   if (cs) setupContact(cs);
-  renderGrid(); initKPR(); $$('#fr-root select.fr-select, #kontak select.fr-select').forEach(enhanceSelect); decorateTags(); setupReveal(); loadInstagram(); return true;
+  renderGrid(); initKPR(); $$('#fr-root select.fr-select, #kontak select.fr-select').forEach(enhanceSelect); decorateTags(); setupReveal(); loadInstagram(); applyCms(); CMS_READY.then(applyCms); return true;
 }
 
 /* ---- contact section (template's "Let's bring your ideas to life" card) -> form that sends to WhatsApp ---- */
@@ -944,7 +1034,7 @@ function setupContact(sec) {
     const lead = { name: v.nama.trim(), phone: ph, service: v.layanan };
     if (v.email) lead.email = v.email.trim(); if ((v.pesan || '').trim()) lead.message = v.pesan.trim();
     if (isSurvey) { lead.propertyNo = +v.unit; lead.viewingAt = new Date(`${v.tgl}T${v.jam}:00+07:00`).toISOString(); }
-    sendInquiry(lead).then(r => { const st = $('#fr-cstatus'); if (r && st) st.textContent = `Permintaan Anda tercatat (${r.dealCode}). Membuka WhatsApp Concierge…`; });
+    sendInquiry(lead).then(r => { const st = $('#fr-cstatus'); if (r && st) st.textContent = isSurvey ? `Booking survei Anda sudah terdaftar (${r.dealCode}).${r.whatsappSent ? ' Konfirmasi otomatis telah dikirim ke WhatsApp Anda.' : ''} Membuka WhatsApp Concierge…` : `Permintaan Anda tercatat (${r.dealCode}). Membuka WhatsApp Concierge…`; });
   });
 }
 

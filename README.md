@@ -38,6 +38,8 @@ statis di `fortis.js` bila API tidak terjangkau (hasil terakhir juga disimpan di
 | --- | --- | --- |
 | Katalog unit | `GET /api/public/properties?format=site` | Grid, halaman detail (`/?unit=ID`), filter lokasi, daftar unit di form kontak. Unit **SOLD** disembunyikan; *Coming soon* / *Reserved* tampil sebagai tag fasilitas |
 | Bunga KPR acuan | `GET /api/public/settings` | Mengisi default "Suku Bunga" di kalkulator KPR (pengunjung tetap bisa mengubahnya) |
+| Tampilan situs (CMS) | `GET /api/public/cms` | Warna tema (CSS variable), video/gambar hero, foto Tentang, urutan & visibilitas section. Di-cache di localStorage, fallback ke tampilan bawaan |
+| Booking survei | `POST /api/public/bookings` | Jadwal survei dari form kontak/detail unit; dashboard membuat deal + konfirmasi WhatsApp otomatis (fallback ke `/inquiries`) |
 | Booking survey / pesan | `POST /api/public/inquiries` | Form kontak mengirim lead ke dashboard (muncul di Deals, Tasks, Leads) lalu tetap membuka WhatsApp |
 
 ### Hot Deal & diskon
