@@ -56,6 +56,9 @@ function injectHtml(s, route) {
     `<link rel="stylesheet" href="${BASE}/__fortis/fortis.css?v=${V_CSS}">${HEAD_SCRIPT}<script>${TITLE_GUARD}</script>${FADE}<script defer src="${BASE}/__fortis/fortis.js?v=${V_JS}"></script>` +
     `<style>#__framer-badge-container,.__framer-badge{display:none!important}</style></head>`);
   s = s.replace(/<script[^>]*(events\.framer\.com|framer\.com\/edit)[^>]*><\/script>/g, '');
+  // performance: only the first 4 images are eagerly loaded; the rest wait until near the viewport
+  let imgN = 0;
+  s = s.replace(/<img\b(?![^>]*\bloading=)([^>]*)>/g, (m, a) => (++imgN <= 4 ? m : `<img loading="lazy" decoding="async"${a}>`));
   return protectEmails(s);
 }
 
