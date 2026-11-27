@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { brandHead, TITLE_GUARD, FADE } from './head.mjs';
+import { apiAllowed, applySeoHead, canonicalMatches, fetchSeoHead, pool, validateHead } from './seo.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(ROOT, 'full');
@@ -94,10 +95,23 @@ mkdirp(OUT);
 
 // 1) rendered pages  (_rendered/<route>/index.html  ->  dist/<route>/index.html)
 const RENDERED = path.join(SRC, '_rendered');
-for (const f of walk(RENDERED)) {
-  if (path.basename(f) !== 'index.html') continue;
-  const rel = path.relative(RENDERED, f).split(path.sep).join('/');
-  const html = injectHtml(fs.readFileSync(f, 'utf8'), '/' + rel.replace(/index\.html$/, ''));
+//    SEO Engine head per page (via the dashboard proxy, max 5 requests at a time); a failure keeps the default Fortis head
+const pages = walk(RENDERED).filter((f) => path.basename(f) === 'index.html').map((f) => path.relative(RENDERED, f).split(path.sep).join('/'));
+const seoPath = (rel) => '/' + rel.replace(/index\.html$/, '').replace(/\/$/, '');
+if (API && !apiAllowed(API)) console.warn('SEO Engine head: skipped (FORTIS_API must be https)');
+const seo = new Map((await pool(pages.filter((r) => r !== '404/index.html'), 5, async (rel) => {
+  const r = await fetchSeoHead(API, seoPath(rel)); if (!r) return [rel, null];
+  const v = validateHead(r.head_html), pageUrl = `${ORIGIN}${BASE}${seoPath(rel)}`;
+  if (!v.ok) { console.warn(`SEO Engine head rejected for ${seoPath(rel)}: ${v.reason}`); return [rel, null]; }
+  if (!canonicalMatches(v.canonical, pageUrl)) { console.warn(`SEO Engine head skipped for ${seoPath(rel)}: canonical ${v.canonical} is not ${pageUrl}`); return [rel, null]; }
+  return [rel, r];
+})));
+const seoHits = [...seo.values()].filter(Boolean).length;
+console.log(API ? `SEO Engine head: ${seoHits}/${seo.size} pages (others keep the default head)` : 'SEO Engine head: skipped (no FORTIS_API)');
+for (const rel of pages) {
+  const f = path.join(RENDERED, rel);
+  let html = injectHtml(fs.readFileSync(f, 'utf8'), '/' + rel.replace(/index\.html$/, ''));
+  html = applySeoHead(html, seo.get(rel)?.head_html);
   write(path.join(OUT, rel), html);
   if (rel === '404/index.html') write(path.join(OUT, '404.html'), html); // GitHub Pages fallback page
   count++;

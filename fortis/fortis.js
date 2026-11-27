@@ -363,7 +363,8 @@ function textSwap() {
     if (core) { const r = TS_RULES.find(x => x.all.includes(core)); if (r) v = v.replace(v.trim(), LANG === 'en' ? r.en : r.id); }
     if (v !== o) n.nodeValue = v;
   }
-    const T = 'Fortis Realty';
+    // the SEO Engine title (build-time head, see seo.mjs) wins over the plain brand title
+  const T = document.querySelector('meta[name="fr-seo"]') && window.__frTitle ? window.__frTitle : 'Fortis Realty';
   window.__frTitle = T; if (document.title !== T) document.title = T;
   document.documentElement.lang = LANG;
 }
